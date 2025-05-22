@@ -25,12 +25,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Convert Markdown to HTML
+        uses: natescherer/markdown-to-html-with-github-style-action@v1.1.0
+        with:
+          path: README.md
+      - run: mv README.html index.html
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload dist directory
           path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
