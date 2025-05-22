@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Markdown Unified Diff, Multiple panels (A→B, B→C, etc Add/Remove Highlighted)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/7.0.0/diff.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f7fafc; margin: 0; }
+    .header { background: #2b6cb0; color: #fff; padding: 1.2em 2em 1em 2em; }
+    .brand { font-size: 1.25em; font-weight: bold; letter-spacing: .04em;}
+    .dropper {
+      margin: 1.4em auto 1em auto;
+      background: #fff;
+      border: 2px dashed #90cdf4;
+      border-radius: 10px;
+      text-align: center;
+      padding: 2em 1.5em;
+      color: #2b6cb0;
+      font-size: 1.1em;
+      cursor: pointer;
+      max-width: 540px;
+      transition: background 0.2s;
+    }
+    .dropper.dragover { background: #ebf8ff; }
+    .panel-nav {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.4em;
+      margin: 0.5em 2em 0.5em 2em;
+    }
+    .panel-nav-btn {
+      border: none;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      border-radius: 4px;
+      font-size: 1.8em;
+      width: 1.6em;
+      height: 1.6em;
+      cursor: pointer;
+      transition: background 0.13s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .panel-nav-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .panel-nav-btn:hover:not(:disabled) {
+      background: #bee3f8;
+    }
+    .stage-panels-container {
+      display: flex;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      padding: 1.5em 0.5em 2.5em;
+    }
+    .panel {
+      min-width: min(560px, 94vw);
+      max-width: 620px;
+      margin: 0 1em;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px #2b6cb028;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      border-top: 8px solid #2b6cb0;
+      position: relative;
+      transition: border-color 0.2s;
+      flex-shrink: 0;
+      height: 80vh;
+      overflow: hidden;
+    }
+    .panel.panel-blue { border-top-color: #2b6cb0; }
+    .panel.panel-green { border-top-color: #2f855a; }
+    .panel.panel-orange { border-top-color: #dd6b20; }
+    .panel.panel-purple { border-top-color: #6b46c1; }
+    .panel.panel-pink { border-top-color: #d53f8c; }
+    .panel .panel-header {
+      font-size: 1.1em;
+      font-weight: bold;
+      padding: 1.1em 1.2em 0.5em 1.2em;
+      color: #2b6cb0;
+    }
+    .panel .panel-files {
+      font-size: 1em;
+      color: #444;
+      padding: 0 1.2em 0.8em 1.2em;
+    }
+    .panel-content {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      background: #f7fafc;
+      font-size: 1.16em;
+      border-radius: 8px;
+      margin: 0 1.2em 1.2em 1.2em;
+      box-shadow: 0 0 0 1px #ebf8ff inset;
+      padding: 1.5em 1.2em;
+    }
+    /* Panel color themes */
+    .panel-blue  .diff-added { background: #2b6cb0; color: #fff; }
+    .panel-blue  .diff-removed { background: #c3dafe; color: #2b6cb0; }
+    .panel-green .diff-added { background: #276749; color: #fff; }
+    .panel-green .diff-removed { background: #c6f6d5; color: #276749; }
+    .panel-orange .diff-added { background: #c05621; color: #fff; }
+    .panel-orange .diff-removed { background: #fbd38d; color: #c05621; }
+    .panel-purple .diff-added { background: #553c9a; color: #fff; }
+    .panel-purple .diff-removed { background: #d6bcfa; color: #553c9a; }
+    .panel-pink .diff-added { background: #97266d; color: #fff; }
+    .panel-pink .diff-removed { background: #fbb6ce; color: #97266d; }
+    .diff-added,
+    .diff-removed {
+      border-radius: 3px;
+      padding: 0 .18em;
+    }
+    /* Github markdown styles */
+    .panel-content h1, .panel-content h2, .panel-content h3,
+    .panel-content h4, .panel-content h5, .panel-content h6 {
+      font-weight: bold;
+      margin: 1.2em 0 0.6em 0;
+    }
+    .panel-content pre, .panel-content code {
+      background: #f6f8fa;
+      border-radius: 4px;
+      padding: 0.2em 0.4em;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.98em;
+    }
+    .panel-content pre {
+      padding: 0.7em;
+      overflow-x: auto;
+      margin: 1em 0;
+    }
+    .panel-content blockquote {
+      background: #f6f8fa;
+      border-left: 4px solid #e2e8f0;
+      margin: 1em 0;
+      padding: 0.4em 1em;
+      color: #5c6370;
+    }
+    .panel-content ul, .panel-content ol {margin: 0.4em 0 0.4em 2em;}
+    .file-btn { border:none; background:#ebf8ff; color:#2b6cb0; border-radius:5px; padding:0.2em 0.7em; cursor:pointer; }
+    .file-btn:hover { background:#bee3f8; }
+    .version-info {font-size:0.98em; opacity:0.77; margin:0.5em 1.5em;}
+    @media (max-width: 900px) {
+      .panel { min-width: 98vw;}
+      .stage-panels-container { padding: 1em 0.2em 2em;}
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">Markdown Unified Diff, Multiple panels <span style="font-size:0.82em;font-weight:normal;">(A→B, B→C, etc Add/Remove Highlighted)</span></div>
+    <div class="version-info">
+      <b>v20250522</b> – Drop 2+ markdown files. Each panel shows the base text with <b>unified diff</b> (removals and additions as inline, colored spans). Use arrows to navigate panels.
+    </div>
+  </div>
+  <div id="dropper" class="dropper">
+    <b>Drop TWO OR MORE Markdown files here</b> or click.<br>
+    <span style="font-size:0.93em;">Files are compared in alphabetical order. All processing is local.</span>
+  </div>
+  <div class="panel-nav" id="panel-nav"></div>
+  <div class="stage-panels-container" id="panels"></div>
+  <script>
+    // --- State
+    let files = []; // {name, text}
+    let panels = []; // {fromIdx, toIdx}
+    let currentPanelIdx = 0;
+    const COLORS = [
+      { name: "blue",   border: "panel-blue"   },
+      { name: "green",  border: "panel-green"  },
+      { name: "orange", border: "panel-orange" },
+      { name: "purple", border: "panel-purple" },
+      { name: "pink",   border: "panel-pink"   }
+    ];
+
+    // --- DOM
+    const dropper = document.getElementById("dropper");
+    const panelsContainer = document.getElementById("panels");
+    const panelNav = document.getElementById("panel-nav");
+
+    // --- File Dropper
+    dropper.addEventListener("dragover", e => {
+      e.preventDefault(); dropper.classList.add("dragover");
+    });
+    dropper.addEventListener("dragleave", e => {
+      dropper.classList.remove("dragover");
+    });
+    dropper.addEventListener("drop", e => {
+      e.preventDefault(); dropper.classList.remove("dragover");
+      handleFiles(e.dataTransfer.files);
+    });
+    dropper.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".md,.markdown";
+      input.multiple = true;
+      input.onchange = e => handleFiles(e.target.files);
+      input.click();
+    });
+
+    function handleFiles(fileList) {
+      const arr = Array.from(fileList).filter(f => f.name.match(/\.(md|markdown)$/i));
+      if (arr.length < 2) {
+        alert("Please drop at least TWO markdown files.");
+        return;
+      }
+      arr.sort((a,b) => a.name.localeCompare(b.name));
+      Promise.all(arr.map(f => f.text())).then(texts => {
+        files = arr.map((f, i) => ({
+          name: f.name,
+          text: texts[i]
+        }));
+        panels = [];
+        for (let i = 0; i < files.length - 1; ++i) {
+          panels.push({ fromIdx: i, toIdx: i + 1 });
+        }
+        currentPanelIdx = 0;
+        dropper.style.display = "none";
+        renderPanels();
+      });
+    }
+
+    // --- Panel rendering (multi-panel, unified diff)
+    function renderPanels() {
+      panelsContainer.innerHTML = "";
+      panelNav.innerHTML = "";
+      if (panels.length < 1) return;
+      // Navigation
+      if (panels.length > 2) {
+        const prevBtn = document.createElement("button");
+        prevBtn.className = "panel-nav-btn";
+        prevBtn.innerHTML = "&#8592;";
+        prevBtn.disabled = currentPanelIdx === 0;
+        prevBtn.onclick = () => { showPanel(currentPanelIdx - 1); };
+        const nextBtn = document.createElement("button");
+        nextBtn.className = "panel-nav-btn";
+        nextBtn.innerHTML = "&#8594;";
+        nextBtn.disabled = currentPanelIdx === panels.length - 1;
+        nextBtn.onclick = () => { showPanel(currentPanelIdx + 1); };
+        panelNav.appendChild(prevBtn);
+        panelNav.appendChild(nextBtn);
+      }
+      // Panels
+      panels.forEach((panel, idx) => {
+        const color = COLORS[idx % COLORS.length];
+        const from = files[panel.fromIdx];
+        const to = files[panel.toIdx];
+        const panelDiv = document.createElement("div");
+        panelDiv.className = `panel ${color.border}`;
+        panelDiv.style.display = (idx === currentPanelIdx || panels.length <= 2) ? "" : "none";
+        panelDiv.innerHTML = `
+          <div class="panel-header">Panel ${idx + 1} of ${panels.length}</div>
+          <div class="panel-files">
+            <span>${from.name}</span> <span style="color:#888;">→</span> <span>${to.name}</span>
+            <button class="file-btn" onclick="window.location.reload()">Change files</button>
+          </div>
+          <div class="panel-content">${renderUnifiedDiff(from.text, to.text)}</div>
+        `;
+        panelsContainer.appendChild(panelDiv);
+      });
+    }
+    function showPanel(idx) {
+      currentPanelIdx = idx;
+      renderPanels();
+      setTimeout(() => {
+        panelsContainer.scrollLeft = 0;
+      }, 10);
+    }
+    // Keyboard panel navigation
+    window.addEventListener("keydown", e => {
+      if (!panels.length) return;
+      if (e.key === "ArrowLeft") {
+        if (currentPanelIdx > 0) showPanel(currentPanelIdx - 1);
+      }
+      if (e.key === "ArrowRight") {
+        if (currentPanelIdx < panels.length - 1) showPanel(currentPanelIdx + 1);
+      }
+    });
+
+    // --- Unified Diff with Markdown, per panel ---
+    function renderUnifiedDiff(a, b) {
+      // Use JSDiff word diff for the whole text
+      const diff = window.Diff.diffWordsWithSpace(a, b);
+      let out = "";
+      for (let i=0; i<diff.length; ++i) {
+        const part = diff[i];
+        if (part.added) {
+          out += `<span class="diff-added">${escapeHtml(part.value)}</span>`;
+        } else if (part.removed) {
+          out += `<span class="diff-removed">${escapeHtml(part.value)}</span>`;
+        } else {
+          out += escapeHtml(part.value);
+        }
+      }
+      // Render as markdown (for headings, code, lists)
+      return marked.parse(out, {gfm:true, breaks:true});
+    }
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+      })[m]);
+    }
+  </script>
+ </body>
+</html>
